@@ -1,18 +1,404 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Flames App</title>
-    <link rel="icon" type="image/x-icon" href="favicon.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-mono/style.css">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Suno Music Studio — Realtime Generation</title>
+  <meta name="description" content="Generate AI music with the Suno API. Stream, download, and manage your history. Fully client-side.">
+  <link rel="icon" href="/favicon.svg" />
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter", "Manrope", "system-ui", "sans-serif"],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81'
+            }
+          },
+          boxShadow: {
+            glow: '0 0 60px rgba(99,102,241,0.25)'
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Spline Web Component -->
+  <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.1/build/spline-viewer.js"></script>
+  <style>
+    .glass { backdrop-filter: saturate(160%) blur(12px); background: linear-gradient(to bottom right, rgba(20,20,35,0.55), rgba(20,20,35,0.35)); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-white font-sans antialiased">
+  <!-- Hero with Spline -->
+  <section class="relative min-h-[52vh] flex items-center justify-center overflow-hidden">
+    <div class="absolute inset-0">
+      <spline-viewer url="https://prod.spline.design/4cHQr84zOGAHOehh/scene.splinecode" style="width:100%;height:100%"></spline-viewer>
+    </div>
+    <div class="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-slate-950/40 to-slate-950 pointer-events-none"></div>
+    <div class="relative z-10 text-center px-6 py-16">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 ring-1 ring-white/15 mb-5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-sm text-white/80">Client‑side Suno API Studio</span>
+      </div>
+      <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight">Create. Stream. Download.<br class="hidden sm:block"/> Suno AI Music</h1>
+      <p class="mt-4 text-white/70 max-w-2xl mx-auto">Securely use your own API key. Generate immersive tracks, preview instantly, and keep a local history. No backend required.</p>
+    </div>
+  </section>
+
+  <!-- Main app -->
+  <main class="relative z-10 -mt-10 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-6xl mx-auto grid lg:grid-cols-3 gap-6">
+      <!-- Controls Card -->
+      <section class="lg:col-span-2 glass rounded-2xl shadow-glow p-6 ring-1 ring-white/10">
+        <div class="flex flex-col gap-6">
+          <!-- API status + model -->
+          <div class="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end justify-between">
+            <div class="flex-1">
+              <label for="model" class="text-sm text-white/70">Model</label>
+              <select id="model" class="mt-1 w-full bg-slate-900/70 border border-white/10 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/60">
+                <option>V3_5</option>
+                <option selected>V4</option>
+                <option>V4_5</option>
+                <option>V4_5PLUS</option>
+                <option>V5</option>
+              </select>
+            </div>
+            <div class="flex-1">
+              <label for="callbackUrl" class="text-sm text-white/70">Callback URL (optional)</label>
+              <input id="callbackUrl" type="url" placeholder="Webhook URL for server callbacks (leave empty to auto‑poll)" class="mt-1 w-full bg-slate-900/70 border border-white/10 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/60" />
+            </div>
+          </div>
+
+          <!-- Prompt -->
+          <div>
+            <div class="flex items-center justify-between">
+              <label for="prompt" class="text-sm text-white/70">Prompt</label>
+              <div class="text-xs text-white/50"><span id="charCount">0</span>/500</div>
+            </div>
+            <textarea id="prompt" maxlength="500" rows="5" placeholder="Describe the track. Style, mood, tempo, instruments, vocals..." class="mt-1 w-full bg-slate-900/70 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500/60"></textarea>
+            <div class="mt-2 text-xs text-white/60" id="promptPreview"></div>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex flex-wrap items-center gap-3">
+            <button id="btnGenerate" class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 active:bg-brand-700 transition text-white font-semibold px-4 py-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed">
+              <span>Generate</span>
+            </button>
+            <button id="btnStream" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 transition text-white font-semibold px-4 py-2.5 rounded-xl disabled:opacity-50">
+              <span>Stream</span>
+            </button>
+            <button id="btnDownload" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 transition text-white font-semibold px-4 py-2.5 rounded-xl disabled:opacity-50">
+              <span>Direct Download</span>
+            </button>
+            <div id="status" class="text-sm text-white/70"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Player & Lyrics -->
+      <section class="glass rounded-2xl shadow-glow p-6 ring-1 ring-white/10">
+        <h3 class="font-semibold text-white/90 mb-3">Playback</h3>
+        <audio id="player" class="w-full" controls preload="none"></audio>
+        <div class="mt-3 flex items-center gap-3" aria-label="Seek controls">
+          <input id="seek" type="range" min="0" max="100" value="0" class="w-full accent-brand-500" />
+          <span id="timeLabel" class="text-xs text-white/60 w-20 text-right">00:00 / 00:00</span>
+        </div>
+        <div class="mt-5">
+          <h4 class="text-sm font-semibold text-white/70">Lyrics</h4>
+          <div id="lyrics" class="mt-2 max-h-56 overflow-auto no-scrollbar text-white/80 text-sm leading-6 space-y-1"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- History -->
+    <section class="max-w-6xl mx-auto mt-6 glass rounded-2xl shadow-glow p-6 ring-1 ring-white/10">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-white/90">Generation History</h3>
+        <div class="flex items-center gap-2">
+          <button id="btnClearHistory" class="text-xs text-white/60 hover:text-white/90 underline">Clear</button>
+        </div>
+      </div>
+      <div id="history" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
+
+    <footer class="max-w-6xl mx-auto text-center text-white/50 text-sm py-10">
+      Built client‑side. Keep your API key safe in this session only.
+    </footer>
+  </main>
+
+  <!-- API Key Modal -->
+  <div id="apiModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-slate-950/70"></div>
+    <div class="relative z-10 max-w-lg mx-auto mt-24 glass rounded-2xl p-6 ring-1 ring-white/10">
+      <h2 class="text-xl font-bold">Enter Suno API Key</h2>
+      <p class="text-white/70 text-sm mt-1">Your key is kept only for this tab using sessionStorage. It is required for all requests.</p>
+      <input id="apiKeyInput" type="password" placeholder="sk-..." class="mt-4 w-full bg-slate-900/70 border border-white/10 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/60" />
+      <div class="mt-4 flex items-center justify-between">
+        <a href="https://sunoapi.org/" target="_blank" rel="noreferrer" class="text-xs text-white/60 underline">Get an API key</a>
+        <button id="saveApiKey" class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-4 py-2 rounded-xl">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    const API_BASE = 'https://sunoapi.org'; // Base domain; endpoints are assumed as below
+    const els = {
+      model: document.getElementById('model'),
+      callbackUrl: document.getElementById('callbackUrl'),
+      prompt: document.getElementById('prompt'),
+      charCount: document.getElementById('charCount'),
+      promptPreview: document.getElementById('promptPreview'),
+      btnGenerate: document.getElementById('btnGenerate'),
+      btnStream: document.getElementById('btnStream'),
+      btnDownload: document.getElementById('btnDownload'),
+      status: document.getElementById('status'),
+      player: document.getElementById('player'),
+      seek: document.getElementById('seek'),
+      timeLabel: document.getElementById('timeLabel'),
+      lyrics: document.getElementById('lyrics'),
+      history: document.getElementById('history'),
+      btnClearHistory: document.getElementById('btnClearHistory'),
+      apiModal: document.getElementById('apiModal'),
+      apiKeyInput: document.getElementById('apiKeyInput'),
+      saveApiKey: document.getElementById('saveApiKey'),
+    };
+
+    let currentJob = null; // { id, audio_url, stream_url, lyrics, model, prompt }
+
+    // Modal handling
+    function ensureApiKey(){
+      const k = sessionStorage.getItem('SUNO_API_KEY');
+      if(!k){ els.apiModal.classList.remove('hidden'); }
+      return !!k;
+    }
+    function getApiKey(){ return sessionStorage.getItem('SUNO_API_KEY') || ''; }
+
+    els.saveApiKey.addEventListener('click', ()=>{
+      const val = (els.apiKeyInput.value||'').trim();
+      if(!val){ alert('Please enter your API key'); return; }
+      sessionStorage.setItem('SUNO_API_KEY', val);
+      els.apiModal.classList.add('hidden');
+    });
+
+    // Prompt UI
+    function updatePromptMeta(){
+      const v = els.prompt.value;
+      els.charCount.textContent = v.length;
+      els.promptPreview.textContent = v ? 'Preview: ' + v : '';
+    }
+    els.prompt.addEventListener('input', updatePromptMeta);
+    updatePromptMeta();
+
+    // Player controls
+    function formatTime(t){
+      const m = Math.floor(t/60).toString().padStart(2,'0');
+      const s = Math.floor(t%60).toString().padStart(2,'0');
+      return m+":"+s;
+    }
+    els.player.addEventListener('timeupdate', ()=>{
+      if(!isFinite(els.player.duration)) return;
+      const pct = (els.player.currentTime / els.player.duration) * 100;
+      els.seek.value = isNaN(pct)? 0 : pct;
+      els.timeLabel.textContent = `${formatTime(els.player.currentTime)} / ${formatTime(els.player.duration||0)}`;
+    });
+    els.seek.addEventListener('input', ()=>{
+      if(!isFinite(els.player.duration)) return;
+      els.player.currentTime = (parseFloat(els.seek.value)/100) * els.player.duration;
+    });
+
+    // History
+    function loadHistory(){
+      try { return JSON.parse(localStorage.getItem('SUNO_HISTORY')||'[]'); } catch { return []; }
+    }
+    function saveHistory(list){ localStorage.setItem('SUNO_HISTORY', JSON.stringify(list.slice(0, 20))); }
+    function addToHistory(entry){
+      const list = loadHistory();
+      list.unshift(entry);
+      saveHistory(list);
+      renderHistory();
+    }
+    function renderHistory(){
+      const list = loadHistory();
+      els.history.innerHTML = '';
+      if(!list.length){ els.history.innerHTML = '<div class="text-white/50 text-sm">No generations yet.</div>'; return; }
+      for(const item of list){
+        const card = document.createElement('div');
+        card.className = 'rounded-xl border border-white/10 bg-slate-900/50 p-4 flex flex-col gap-3';
+        card.innerHTML = `
+          <div class="text-xs text-white/50">${new Date(item.created_at).toLocaleString()} • <span class="px-2 py-0.5 rounded bg-white/10">${item.model}</span></div>
+          <div class="text-sm text-white/80 line-clamp-3">${escapeHtml(item.prompt)}</div>
+          <audio src="${item.audio_url||''}" controls preload="none" class="w-full"></audio>
+          ${renderLyricsHtml(item.lyrics)}
+          <div class="flex gap-2">
+            <button class="px-3 py-1.5 rounded bg-brand-500 hover:bg-brand-600 text-sm" data-action="replay">Replay</button>
+            <button class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sm" data-action="stream">Stream</button>
+            <button class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sm" data-action="download">Download</button>
+          </div>
+        `;
+        card.querySelector('[data-action="replay"]').addEventListener('click', ()=>{
+          if(item.audio_url){ setAudio(item.audio_url); }
+        });
+        card.querySelector('[data-action="stream"]').addEventListener('click', ()=>{
+          if(item.stream_url){ setAudio(item.stream_url); } else { toast('No stream URL available for this item.'); }
+        });
+        card.querySelector('[data-action="download"]').addEventListener('click', ()=>{
+          if(item.audio_url){ directDownload(item.audio_url); } else { toast('No audio URL to download.'); }
+        });
+        els.history.appendChild(card);
+      }
+    }
+
+    // Lyrics rendering
+    function renderLyricsHtml(lyrics){
+      if(!lyrics) return '';
+      if(Array.isArray(lyrics)){
+        return '<div class="text-xs text-white/60 space-y-1">' + lyrics.map(l=>{
+          const t = l.timestamp != null ? '['+formatTime(l.timestamp)+'] ' : '';
+          return `<div>${t}${escapeHtml(l.text||'')}</div>`;
+        }).join('') + '</div>';
+      }
+      return `<div class="text-xs text-white/60">${escapeHtml(String(lyrics))}</div>`;
+    }
+    function setLyrics(lyrics){ els.lyrics.innerHTML = renderLyricsHtml(lyrics); }
+
+    // Helpers
+    function escapeHtml(s){ return String(s).replace(/[&<>"]g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+    function toast(msg){ els.status.textContent = msg; }
+    function setLoading(loading){
+      els.btnGenerate.disabled = loading;
+      els.btnStream.disabled = loading;
+      els.btnDownload.disabled = loading;
+    }
+    function setAudio(url){ els.player.src = url; els.player.play().catch(()=>{}); }
+
+    // API
+    async function apiGenerate({prompt, model, callback_url}){
+      const key = getApiKey();
+      if(!key) throw new Error('API key missing');
+      const res = await fetch(`${API_BASE}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({ prompt, model, callback_url }),
+      });
+      if(!res.ok){
+        const txt = await res.text().catch(()=>res.statusText);
+        throw new Error(`Generate failed: ${res.status} ${txt}`);
+      }
+      return res.json(); // expected: { id } | { job_id }
+    }
+
+    async function apiStatus(id){
+      const key = getApiKey();
+      const res = await fetch(`${API_BASE}/api/generate/${encodeURIComponent(id)}`, {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      if(!res.ok){ throw new Error('Status error: ' + res.status); }
+      return res.json(); // expected fields: status, audio_url, stream_url, lyrics
+    }
+
+    async function pollUntilReady(id, {timeoutMs = 180000, intervalMs = 2000} = {}){
+      const start = Date.now();
+      let attempt = 0;
+      while(Date.now() - start < timeoutMs){
+        attempt++;
+        try {
+          const data = await apiStatus(id);
+          if(data.status === 'completed' || data.status === 'ready' || (data.audio_url && data.audio_url.length)){
+            return data;
+          }
+          if(data.status === 'failed'){ throw new Error(data.error || 'Generation failed'); }
+          toast(`Generating… (${attempt})`);
+        } catch(e){ toast(String(e.message||e)); }
+        await new Promise(r=>setTimeout(r, intervalMs));
+        intervalMs = Math.min(8000, Math.round(intervalMs * 1.25));
+      }
+      throw new Error('Timeout waiting for generation. It may still complete later.');
+    }
+
+    // Actions
+    els.btnGenerate.addEventListener('click', async ()=>{
+      if(!ensureApiKey()) return; // show modal if missing
+      const prompt = (els.prompt.value||'').trim();
+      if(!prompt){ toast('Please enter a prompt.'); return; }
+      const model = els.model.value;
+      const callback_url = (els.callbackUrl.value||'').trim() || undefined; // if empty, we'll poll
+
+      setLoading(true);
+      toast('Submitting your prompt…');
+      try {
+        const resp = await apiGenerate({ prompt, model, callback_url });
+        const id = resp.id || resp.job_id || resp.task_id;
+        if(!id){ throw new Error('No job id returned from API'); }
+        currentJob = { id, prompt, model };
+        const data = callback_url ? {} : await pollUntilReady(id);
+        const payload = { ...currentJob, ...data };
+        if(payload.audio_url){ setAudio(payload.audio_url); }
+        if(payload.lyrics){ setLyrics(payload.lyrics); }
+        currentJob = payload;
+        addToHistory({ ...payload, created_at: Date.now() });
+        toast('Ready');
+      } catch(err){
+        console.error(err);
+        toast(err.message || 'Request error. Check API key, CORS, and model.');
+      } finally { setLoading(false); }
+    });
+
+    els.btnStream.addEventListener('click', ()=>{
+      if(!currentJob){ toast('Nothing to stream yet. Generate first.'); return; }
+      if(currentJob.stream_url){ setAudio(currentJob.stream_url); }
+      else if(currentJob.audio_url){ setAudio(currentJob.audio_url); toast('No stream URL; playing audio URL.'); }
+      else { toast('Stream is not available yet.'); }
+    });
+
+    async function directDownload(url){
+      try {
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('Download failed');
+        const blob = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'suno-track.mp3';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+      } catch(e){ toast('Direct download failed: ' + (e.message||e)); }
+    }
+
+    els.btnDownload.addEventListener('click', ()=>{
+      if(!currentJob || !currentJob.audio_url){ toast('No audio to download yet.'); return; }
+      directDownload(currentJob.audio_url);
+    });
+
+    els.btnClearHistory.addEventListener('click', ()=>{
+      if(confirm('Clear local generation history?')){ localStorage.removeItem('SUNO_HISTORY'); renderHistory(); }
+    });
+
+    // Initialize UI
+    renderHistory();
+    ensureApiKey();
+  })();
+  </script>
+</body>
 </html>
