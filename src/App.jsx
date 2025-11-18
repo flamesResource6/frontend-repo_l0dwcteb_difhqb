@@ -1,18 +1,33 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import Spline from '@splinetool/react-spline'
+import React, { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { Play, Pause, Download, History, Volume2, Music2, Wand2, Globe, Radio, KeyRound, Loader2 } from 'lucide-react'
+
+// Lazy-load Spline to avoid crashing the whole app if it fails to load in some environments
+const Spline = React.lazy(() => import('@splinetool/react-spline'))
 
 const MODELS = ['V3_5','V4','V4_5','V4_5PLUS','V5']
 
 function useSessionKey() {
-  const [key, setKey] = useState(() => sessionStorage.getItem('SUNO_API_KEY') || '')
-  const save = (k) => { sessionStorage.setItem('SUNO_API_KEY', k); setKey(k) }
-  const clear = () => { sessionStorage.removeItem('SUNO_API_KEY'); setKey('') }
+  const [key, setKey] = useState(() => {
+    try { return sessionStorage.getItem('SUNO_API_KEY') || '' } catch { return '' }
+  })
+  const save = (k) => { try { sessionStorage.setItem('SUNO_API_KEY', k) } catch {} setKey(k) }
+  const clear = () => { try { sessionStorage.removeItem('SUNO_API_KEY') } catch {} setKey('') }
   return { key, save, clear }
 }
 
 function humanTime(ts) {
   try { return new Date(ts).toLocaleString() } catch { return '' }
+}
+
+// Simple error boundary for third-party widgets
+class ErrorBoundary extends React.Component { 
+  constructor(props){ super(props); this.state = { hasError: false } }
+  static getDerivedStateFromError(){ return { hasError: true } }
+  componentDidCatch(){ /* no-op */ }
+  render(){
+    if (this.state.hasError) return this.props.fallback || null
+    return this.props.children
+  }
 }
 
 function App() {
@@ -24,7 +39,6 @@ function App() {
     if (envUrl) return envUrl
     try {
       const loc = window.location
-      // Assume monorepo ports 3000(frontend) / 8000(backend)
       const backend = `${loc.protocol}//${loc.hostname}:8000`
       return backend
     } catch {
@@ -58,7 +72,7 @@ function App() {
   }, [volume])
 
   useEffect(() => {
-    localStorage.setItem('GEN_HISTORY', JSON.stringify(history))
+    try { localStorage.setItem('GEN_HISTORY', JSON.stringify(history)) } catch {}
   }, [history])
 
   const withKeyHeaders = (headers={}) => ({
@@ -77,10 +91,9 @@ function App() {
       if (!res.ok) throw new Error(`Status error ${res.status}`)
       const data = await res.json()
       last = JSON.stringify(data)
-      // Try to detect readiness: fields may vary; look for audio/mp3 url or state
       const ready = data.ready || data.status === 'ready' || data.state === 'completed' || data.audio_url || data.stream_url
       if (ready) return data
-      setStatusMsg(`Generating... (${Math.ceil((Date.now()-start)/1000)}s)`) // feedback
+      setStatusMsg(`Generating... (${Math.ceil((Date.now()-start)/1000)}s)`) 
       await new Promise(r => setTimeout(r, interval))
     }
     throw new Error(`Generation timed out. Last status: ${last}`)
@@ -176,7 +189,6 @@ function App() {
   function onAudioPlay(){ setPlaying(true) }
   function onAudioPause(){ setPlaying(false) }
 
-  // Simple timestamped lyric renderer (expects {lyrics: string | array})
   function LyricsView({ data }){
     if (!data) return null
     if (data.error) return <p className="text-red-300">{data.error}</p>
@@ -196,7 +208,6 @@ function App() {
     return <pre className="whitespace-pre-wrap text-blue-100/90 leading-relaxed">{content}</pre>
   }
 
-  // API Key Modal
   function ApiKeyModal(){
     const [localKey, setLocalKey] = useState(apiKey)
     useEffect(()=>{ setLocalKey(apiKey) }, [apiKey])
@@ -236,10 +247,14 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white relative overflow-x-hidden">
       <ApiKeyModal />
 
-      {/* Hero with Spline */}
+      {/* Hero with Spline (lazy + error boundary) */}
       <header className="relative">
         <div className="absolute inset-0 pointer-events-none opacity-70">
-          <Spline scene="https://prod.spline.design/4cHQr84zOGAHOehh/scene.splinecode" />
+          <ErrorBoundary fallback={<div className="w-full h-[300px] bg-gradient-to-r from-blue-500/10 to-purple-500/10" /> }>
+            <Suspense fallback={<div className="w-full h-[300px] bg-gradient-to-r from-blue-500/10 to-purple-500/10" /> }>
+              <Spline scene="https://prod.spline.design/4cHQr84zOGAHOehh/scene.splinecode" />
+            </Suspense>
+          </ErrorBoundary>
         </div>
         <div className="relative z-10 px-6 pt-16 pb-10 max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row items-center gap-8">
@@ -304,7 +319,7 @@ function App() {
               </button>
             </div>
 
-            <div className="mt-4 text-sm text-blue-200/80 min-h-[24px]" role="status">{statusMsg}</div>
+            <div className="mt-4 text-sm text-blue-200/80 min-h-[24px]" role="status">{statusMsg || (!apiKey ? 'Enter your Suno API key to get started.' : '')}</div>
 
             {/* Live Preview */}
             <div className="mt-6 p-4 rounded-xl bg-slate-800/70 border border-slate-700">
@@ -329,7 +344,7 @@ function App() {
                 >
                   {playing ? <Pause/> : <Play/>}
                 </button>
-                <audio ref={audioRef} src={audioSrc} controls className="flex-1" onPlay={onAudioPlay} onPause={onAudioPause} />
+                <audio ref={audioRef} src={audioSrc} controls className="flex-1" onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} />
               </div>
             </div>
 
