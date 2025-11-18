@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Spline from '@splinetool/react-spline'
-import { Play, Pause, Download, History, Volume2, Music2, Wand2, Globe, Radio, KeyRound, LinkIcon, Loader2 } from 'lucide-react'
+import { Play, Pause, Download, History, Volume2, Music2, Wand2, Globe, Radio, KeyRound, Loader2 } from 'lucide-react'
 
 const MODELS = ['V3_5','V4','V4_5','V4_5PLUS','V5']
 
@@ -32,11 +32,8 @@ function App() {
     }
   }, [])
 
-  const defaultCallback = useMemo(() => `${backendBase}/callback`, [backendBase])
-
   const [prompt, setPrompt] = useState('')
   const [model, setModel] = useState('V5')
-  const [callbackUrl, setCallbackUrl] = useState(defaultCallback)
 
   const [busy, setBusy] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
@@ -120,7 +117,7 @@ function App() {
       const res = await fetch(`${backendBase}/generate?api_key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: withKeyHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ prompt, model, callback_url: callbackUrl })
+        body: JSON.stringify({ prompt, model })
       })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
@@ -251,7 +248,7 @@ function App() {
                 <Radio size={14} /> Realtime AI music generation
               </div>
               <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-4">Suno Music Studio</h1>
-              <p className="text-blue-200/90 text-lg max-w-2xl">Generate, stream, and download AI music with full callback support. Bring your prompts to life in seconds.</p>
+              <p className="text-blue-200/90 text-lg max-w-2xl">Generate, stream, and download AI music with full server-side callbacks. Bring your prompts to life in seconds.</p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <button onClick={()=>setShowKeyModal(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10">
                   <KeyRound size={16}/> API Key
@@ -292,17 +289,6 @@ function App() {
                 <select value={model} onChange={(e)=>setModel(e.target.value)} className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-slate-700 focus:border-blue-500">
                   {MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-blue-200 mb-2 flex items-center gap-2"><LinkIcon size={14}/> Callback URL</label>
-                <input
-                  value={callbackUrl}
-                  onChange={(e)=>setCallbackUrl(e.target.value)}
-                  placeholder={defaultCallback}
-                  className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 outline-none border border-slate-700 focus:border-blue-500"
-                />
-                <p className="text-xs text-blue-300/80 mt-1">Customize or leave default. Suno will POST updates here asynchronously.</p>
               </div>
             </div>
 
